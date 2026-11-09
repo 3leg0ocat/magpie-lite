@@ -12,6 +12,7 @@ import (
 	"golang.org/x/term"
 
 	"github.com/yetone/magpie/internal/library"
+	"github.com/yetone/magpie/internal/provider"
 )
 
 const libraryUsage = `magpie library                     what the library gives each agent: instructions, MCP servers, skills
@@ -64,6 +65,9 @@ func libraryCmd(args []string) error {
 		err    error
 		unused string // a server just added that no agent is given
 	)
+	if provider.Trimmed() && (args[1] == "instructions" || args[1] == "rtk") {
+		return fmt.Errorf("magpie-lite's library has MCP servers and skills alone: no %s", args[1])
+	}
 	switch sub, rest := args[1], args[2:]; sub {
 	case "sync":
 		res, err = library.Sync()
@@ -429,21 +433,24 @@ func libraryStatus() error {
 		}
 		return strings.Join(ids, ", ")
 	}
-	fmt.Println(bold.Render("Instructions"))
-	var to []string
-	for _, a := range v.Instructions.Agents {
-		if a.On {
-			to = append(to, a.Agent)
+	// magpie-lite (provider.Trimmed) reads no instructions
+	if v.Instructions != nil {
+		fmt.Println(bold.Render("Instructions"))
+		var to []string
+		for _, a := range v.Instructions.Agents {
+			if a.On {
+				to = append(to, a.Agent)
+			}
 		}
-	}
-	if strings.TrimSpace(v.Instructions.Shared) == "" {
-		fmt.Println(" ", muted.Render("none yet · magpie library instructions set <file>"))
-	} else {
-		fmt.Printf("  %d lines → %s\n", strings.Count(strings.TrimRight(v.Instructions.Shared, "\n"), "\n")+1, on(to))
-	}
-	for _, a := range v.Instructions.Agents {
-		if a.Edited {
-			fmt.Println(" ", amber.Render("!"), a.Agent, muted.Render("magpie's part was edited in "+a.Path))
+		if strings.TrimSpace(v.Instructions.Shared) == "" {
+			fmt.Println(" ", muted.Render("none yet · magpie library instructions set <file>"))
+		} else {
+			fmt.Printf("  %d lines → %s\n", strings.Count(strings.TrimRight(v.Instructions.Shared, "\n"), "\n")+1, on(to))
+		}
+		for _, a := range v.Instructions.Agents {
+			if a.Edited {
+				fmt.Println(" ", amber.Render("!"), a.Agent, muted.Render("magpie's part was edited in "+a.Path))
+			}
 		}
 	}
 	fmt.Println(bold.Render("MCP servers"))

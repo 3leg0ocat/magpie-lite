@@ -463,6 +463,9 @@ func (m *model) openPresets() {
 		provider.NoticePartners(shown...)
 	}()
 	for _, d := range provider.Presets() {
+		if !provider.Offered(d.ID) {
+			continue // magpie-lite's list (provider.Offered)
+		}
 		items = append(items, agent.Option{Value: d.ID, Note: d.Name + " · " + kindNote(d.Kind)})
 	}
 	for _, c := range customAPIs {

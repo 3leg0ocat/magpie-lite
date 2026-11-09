@@ -151,6 +151,9 @@ func setQuietToday(on bool) error {
 
 // start reads the version last run and puts this one in its place.
 func (n *whatsNew) start() {
+	if update.Off() {
+		return // magpie-lite shows no notes
+	}
 	dir := settings.Dir()
 	b, _ := os.ReadFile(filepath.Join(dir, lastRunFile))
 	last := strings.TrimSpace(string(b))

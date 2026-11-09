@@ -17,6 +17,7 @@ import (
 
 	"github.com/yetone/magpie/internal/agent"
 	"github.com/yetone/magpie/internal/edit"
+	"github.com/yetone/magpie/internal/provider"
 )
 
 // The part of an agent's instructions file magpie writes sits between
@@ -667,6 +668,9 @@ var linkSeen struct {
 // looked at — edited by hand, or by another tool that keeps it — and not
 // otherwise: nil, nil. The first look at a file only notes it.
 func SyncLinked() (*Result, error) {
+	if provider.Trimmed() { // magpie-lite gives no instructions
+		return nil, nil
+	}
 	mu.Lock()
 	l, err := load()
 	file := ""

@@ -173,6 +173,16 @@ func revealable(v *library.View) []string {
 	return out
 }
 
+// liteGone answers Not Found for what magpie-lite's library doesn't run
+// (provider.Trimmed): instructions, hooks, subagents and RTK.
+func liteGone(rw http.ResponseWriter, r *http.Request, what string) bool {
+	if provider.Trimmed() && (what == "instructions" || what == "hooks" || what == "subagents" || what == "rtk") {
+		http.NotFound(rw, r)
+		return true
+	}
+	return false
+}
+
 func libraryRoutes(mux *http.ServeMux, w Windows) {
 	browserRoutes(mux, w)
 	mux.HandleFunc("GET /api/library", func(rw http.ResponseWriter, r *http.Request) {
@@ -277,6 +287,9 @@ func libraryRoutes(mux *http.ServeMux, w Windows) {
 	// RTK:which agents have its hook, switching one on or off, and
 	// installing rtk when the page is asked to
 	mux.HandleFunc("GET /api/library/rtk", func(rw http.ResponseWriter, r *http.Request) {
+		if liteGone(rw, r, "rtk") {
+			return
+		}
 		v := library.ReadRTK()
 		// its latest release, and what the package manager it was installed
 		// with has of that release, when GitHub answers in time: the page is
@@ -298,6 +311,9 @@ func libraryRoutes(mux *http.ServeMux, w Windows) {
 		writeJSON(rw, v)
 	})
 	mux.HandleFunc("POST /api/library/rtk", func(rw http.ResponseWriter, r *http.Request) {
+		if liteGone(rw, r, "rtk") {
+			return
+		}
 		var in struct {
 			Agent string
 			On    bool
@@ -314,6 +330,9 @@ func libraryRoutes(mux *http.ServeMux, w Windows) {
 		writeJSON(rw, v)
 	})
 	mux.HandleFunc("POST /api/library/rtk/upgrade", func(rw http.ResponseWriter, r *http.Request) {
+		if liteGone(rw, r, "rtk") {
+			return
+		}
 		v, err := library.UpgradeRTK()
 		if err != nil {
 			fail(rw, err)
@@ -323,6 +342,9 @@ func libraryRoutes(mux *http.ServeMux, w Windows) {
 	})
 	// rtk put on the PATH the agents get, when magpie found it off it
 	mux.HandleFunc("POST /api/library/rtk/path", func(rw http.ResponseWriter, r *http.Request) {
+		if liteGone(rw, r, "rtk") {
+			return
+		}
 		v, err := library.PathRTK()
 		if err != nil {
 			fail(rw, err)
@@ -332,6 +354,9 @@ func libraryRoutes(mux *http.ServeMux, w Windows) {
 	})
 	// distro: in that WSL distro, by rtk's own Linux installer run there
 	mux.HandleFunc("POST /api/library/rtk/install", func(rw http.ResponseWriter, r *http.Request) {
+		if liteGone(rw, r, "rtk") {
+			return
+		}
 		var in struct{ Distro string }
 		// {} or no body: this computer; a body that can't be read, nowhere
 		if err := json.NewDecoder(r.Body).Decode(&in); err != nil && !errors.Is(err, io.EOF) {
@@ -475,6 +500,9 @@ func libraryRoutes(mux *http.ServeMux, w Windows) {
 	})
 	// every change answers with the page as it is after it, and what it did
 	mux.HandleFunc("POST /api/library/{what}/{action}", func(rw http.ResponseWriter, r *http.Request) {
+		if liteGone(rw, r, r.PathValue("what")) {
+			return
+		}
 		var in struct {
 			Name string
 			Old  string

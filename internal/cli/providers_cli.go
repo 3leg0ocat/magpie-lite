@@ -334,6 +334,9 @@ func presets() error {
 	provider.CountPartner(provider.PartnerShown, shown...)
 	provider.NoticePartners(shown...)
 	for _, pr := range append(all, provider.Presets()...) {
+		if !provider.Offered(pr.ID) && !have[pr.ID] {
+			continue // magpie-lite's list (provider.Offered)
+		}
 		if pr.Kind != kind {
 			kind = pr.Kind
 			fmt.Println(faint.Render("  " + map[provider.Kind]string{provider.KindPartner: "partners (sponsors)", provider.KindVendor: "vendors", provider.KindRelay: "relays", provider.KindLocal: "local", provider.KindRemote: "another computer's magpie"}[kind]))
