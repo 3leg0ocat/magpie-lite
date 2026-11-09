@@ -218,7 +218,8 @@ func (n *whatsNew) get(ctx context.Context, all bool, lang string) whatsNewJSON 
 	popup := pending && !shown && !n.quiet && !quietToday()
 	n.mu.Unlock()
 	j := whatsNewJSON{Current: Version, Releases: []update.Note{}}
-	if (!popup && !all) || !update.Released(Version) {
+	// magpie-lite (update.Off): upstream's notes aren't its own
+	if (!popup && !all) || !update.Released(Version) || update.Off() {
 		return j
 	}
 	j.URL = update.ReleasePage(Version)

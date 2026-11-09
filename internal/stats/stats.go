@@ -57,6 +57,10 @@ func Run(version, what string) {
 	if !update.Released(version) && os.Getenv("MAGPIE_STATS_HOST") == "" {
 		return
 	}
+	// magpie-lite (update.Off) isn't counted among magpie's users
+	if update.Off() {
+		return
+	}
 	for {
 		// no network, most likely, when it fails: the next look tries again
 		_ = Send(context.Background(), version, what, time.Now())

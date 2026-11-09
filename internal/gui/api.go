@@ -417,6 +417,9 @@ type settingsJSON struct {
 	OnNetwork       bool     `json:"onNetwork,omitempty"`
 	// Dir is the data folder beside a portable magpie (#508)
 	Portable bool `json:"portable,omitempty"`
+	// Lite: magpie-lite (update.Off), which neither updates itself nor
+	// sends the daily count, and so has no settings for either
+	Lite bool `json:"lite,omitempty"`
 	// Log is the log the desktop app writes (applog), as shown; "" for a
 	// magpie writing none (magpie web)
 	Log string `json:"log,omitempty"`
@@ -784,7 +787,7 @@ func codexWindowUnder(st settings.Settings, model string) *codexRunWindow {
 }
 
 func settingsState() settingsJSON {
-	s := settingsJSON{Settings: settings.Load(), Version: Version, Dir: tilde(settings.Dir()), Portable: settings.Portable() != "", Gateway: gateway.URL()}
+	s := settingsJSON{Settings: settings.Load(), Version: Version, Dir: tilde(settings.Dir()), Portable: settings.Portable() != "", Lite: update.Off(), Gateway: gateway.URL()}
 	s.AddrEnv = os.Getenv("MAGPIE_ADDR")
 	s.Log = tilde(applog.Current())
 	s.Builtins = builtinsState()
