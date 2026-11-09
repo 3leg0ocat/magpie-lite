@@ -46,6 +46,8 @@ var serveLatest = update.Latest
 func serveUpdateAsked(follow *serveFollow) func(want string) provider.RemoteUpdate {
 	return func(want string) provider.RemoteUpdate {
 		switch {
+		case update.Off():
+			return provider.RemoteUpdate{State: "off"}
 		case !update.Released(version):
 			return provider.RemoteUpdate{State: "unsupported", Why: "source"}
 		case !update.Newer(want, version):
