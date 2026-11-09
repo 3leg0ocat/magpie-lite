@@ -12,10 +12,13 @@ func TestTrimmedOffersItsList(t *testing.T) {
 			t.Errorf("%s is no preset", id)
 		}
 	}
-	if !Offered("openrouter") {
+	if !Offered("openrouter") || Trimmed() {
 		t.Fatal("untrimmed: every preset is offered")
 	}
 	trimmed = "on"
+	if !Trimmed() {
+		t.Fatal("trimmed: not Trimmed")
+	}
 	for _, id := range []string{"anthropic", "qwen-cn", "bailian-token-plan", "ollama", RemoteMagpiePreset} {
 		if !Offered(id) {
 			t.Errorf("%s isn't offered", id)
