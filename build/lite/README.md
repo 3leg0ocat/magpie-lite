@@ -11,7 +11,7 @@
 | `claudetui: …ConPTY…` | Claude Code 交互模式使用微软新版 ConPTY（`conpty.dll` + `OpenConsole.exe`）。Windows 10 自带的 ConPTY 会吞掉括号粘贴标记，导致长消息被截断（yetone/magpie#5205）。本构建把这两个文件和它们的 MIT 许可嵌在 exe 里，首次运行 Claude Code 时写到 exe 旁的 `conpty\<版本>\`，只使用这一份。写入或加载失败时直接报错，不会静默退回系统 ConPTY。不带 `liteconpty` 构建标签时，若 exe 旁有 `conpty\` 目录则使用它，否则与上游一致。 |
 | `update: a build with selfUpdate off …` | 构建参数 `-X …/internal/update.selfUpdate=off`：不检查、不下载、不安装 magpie 自身的更新，也不要求 Remote magpie 更新；设置页只显示版本号。插件和 Library 中 skill 的更新不受影响。 |
 | `provider: a build with trimmed on …` | 构建参数 `-X …/internal/provider.trimmed=on`：添加供应商时只列出 Anthropic、OpenAI、Google Gemini、DeepSeek、xAI、Kimi、智谱/Z.ai、MiniMax、阿里云百炼，本地的 Ollama、LM Studio、oMLX、MLX-Serve，以及 Remote magpie；不拉取也不显示赞助商列表。已保存的其他供应商照常使用和编辑；订阅、插件和自定义供应商不受影响。 |
-| `library: no Instructions or Hooks tab` | Library 页不再显示 Instructions 和 Hooks。已有内容和已经分发给各 agent 的文件保持原样。 |
+| `library: …tab` | Library 页只保留 MCP 服务器和技能，不再显示 Instructions、Hooks、子代理和 RTK。已有内容、已经分发给各 agent 的文件和已装的 RTK hook 保持原样。Agents 页为子代理选模型的设置不受影响。 |
 | `lite: Windows package …` | 本目录：打包脚本、ConPTY 许可、本说明，以及 `.github/workflows/lite-release.yml`。 |
 
 不带上述构建标签和参数时，第 2、3 项不生效，行为与上游相同；上游测试因此无需改动。
