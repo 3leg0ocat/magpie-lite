@@ -1,8 +1,11 @@
 package claudetui
 
 import (
+	"bytes"
+	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sync"
 	"syscall"
 	"time"
@@ -27,10 +30,110 @@ type child struct {
 // remove (dropLeft).
 var endSignals = []os.Signal{os.Interrupt, syscall.SIGTERM}
 
+// pseudoConsole is where CreatePseudoConsole and ClosePseudoConsole come
+// from. Windows 10's own (conhost 10.0.19041) drops a paste's bracketed
+// paste marks, so Claude Code takes a long message as many pastes and
+// submits a part of it (#5205); the ConPTY Windows Terminal ships
+// (conpty.dll, which runs the OpenConsole.exe beside it) keeps them. A
+// conpty folder beside magpie's executable is used when there is one, and
+// one that can't be is an error, never the system's: that would lose words
+// again with nothing said. Without the folder, the system's. A build that
+// ships its own (bundle) puts it in conpty\<its version> first, and uses
+// that one alone.
+type pseudoConsole struct {
+	create, close *windows.LazyProc
+	err           error
+}
+
+// bundle is the ConPTY this build ships, set by conpty_bundle_windows.go
+// (-tags liteconpty: magpie-lite); empty in any other build.
+var bundle struct {
+	version            string
+	dll, host, license []byte
+}
+
+var console = sync.OnceValue(func() pseudoConsole {
+	exe, err := os.Executable()
+	if err != nil && bundle.dll != nil {
+		return pseudoConsole{err: fmt.Errorf("the ConPTY magpie ships: %w", err)}
+	}
+	if err == nil {
+		dir := filepath.Join(filepath.Dir(exe), "conpty")
+		if bundle.dll != nil {
+			dir = filepath.Join(dir, bundle.version)
+			if err := unbundle(dir); err != nil {
+				return pseudoConsole{err: fmt.Errorf("the ConPTY magpie ships, put in %s: %w", dir, err)}
+			}
+		}
+		if _, err := os.Stat(dir); err == nil {
+			if _, err := os.Stat(filepath.Join(dir, "OpenConsole.exe")); err != nil {
+				return pseudoConsole{err: fmt.Errorf("the ConPTY in %s: %w", dir, err)}
+			}
+			dll := windows.NewLazyDLL(filepath.Join(dir, "conpty.dll"))
+			pc := pseudoConsole{create: dll.NewProc("CreatePseudoConsole"), close: dll.NewProc("ClosePseudoConsole")}
+			if err := pc.create.Find(); err != nil {
+				pc.err = fmt.Errorf("the ConPTY in %s: %w", dir, err)
+			} else if err := pc.close.Find(); err != nil {
+				pc.err = fmt.Errorf("the ConPTY in %s: %w", dir, err)
+			}
+			return pc
+		}
+	}
+	k := windows.NewLazySystemDLL("kernel32.dll")
+	pc := pseudoConsole{create: k.NewProc("CreatePseudoConsole"), close: k.NewProc("ClosePseudoConsole")}
+	// Windows 10 before 1809 has none, and calling it there panics
+	if err := pc.create.Find(); err != nil {
+		pc.err = fmt.Errorf("no pseudo console on this Windows: %w", err)
+	}
+	return pc
+})
+
+// unbundle writes the ConPTY this build ships into dir where it isn't there
+// already, each file through a name of its own, so a helper starting beside
+// another never loads half of one. One in use (a helper running) can't be
+// replaced, and is fine when it is the same.
+func unbundle(dir string) error {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	for name, b := range map[string][]byte{"conpty.dll": bundle.dll, "OpenConsole.exe": bundle.host, "LICENSE.txt": bundle.license} {
+		path := filepath.Join(dir, name)
+		same := func() bool { have, err := os.ReadFile(path); return err == nil && bytes.Equal(have, b) }
+		if same() {
+			continue
+		}
+		f, err := os.CreateTemp(dir, name+".*.tmp")
+		if err != nil {
+			return err
+		}
+		_, err = f.Write(b)
+		err = errors.Join(err, f.Close())
+		if err == nil {
+			err = os.Rename(f.Name(), path)
+		}
+		if err != nil {
+			os.Remove(f.Name())
+			if !same() {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func createPseudoConsole(size windows.Coord, in, out windows.Handle, h *windows.Handle) error {
+	r, _, _ := console().create.Call(uintptr(*(*uint32)(unsafe.Pointer(&size))), uintptr(in), uintptr(out), 0, uintptr(unsafe.Pointer(h)))
+	if r != 0 {
+		return syscall.Errno(r)
+	}
+	return nil
+}
+
+func closePseudoConsole(h windows.Handle) { _, _, _ = console().close.Call(uintptr(h)) }
+
 func (s *shim) start(path string, args []string) error {
-	// Windows 10 before 1809 has none, and x/sys panics calling it there
-	if err := windows.NewLazySystemDLL("kernel32.dll").NewProc("CreatePseudoConsole").Find(); err != nil {
-		return fmt.Errorf("no pseudo console on this Windows: %w", err)
+	if err := console().err; err != nil {
+		return err
 	}
 	// a .cmd (npm's shim) is run by cmd.exe, its arguments quoted as
 	// Claude Code is run with elsewhere (proc)
@@ -53,9 +156,9 @@ func (s *shim) start(path string, args []string) error {
 		windows.CloseHandle(inW)
 		return err
 	}
-	var console windows.Handle
+	var pc windows.Handle
 	// wide, so a line of Claude Code's screen is a line
-	err := windows.CreatePseudoConsole(windows.Coord{X: screenCols, Y: screenRows}, inR, outW, 0, &console)
+	err := createPseudoConsole(windows.Coord{X: screenCols, Y: screenRows}, inR, outW, &pc)
 	// the console has its own of these
 	windows.CloseHandle(inR)
 	windows.CloseHandle(outW)
@@ -65,15 +168,15 @@ func (s *shim) start(path string, args []string) error {
 		out.Close()
 		return fmt.Errorf("a pseudo console: %w", err)
 	}
-	h, err := startIn(console, cmd.Path, line, childEnv(s.env...))
+	h, err := startIn(pc, cmd.Path, line, childEnv(s.env...))
 	if err != nil {
-		windows.ClosePseudoConsole(console)
+		closePseudoConsole(pc)
 		in.Close()
 		out.Close()
 		return err
 	}
 	s.pty = conpty{in: in, out: out}
-	s.proc, s.console = h, console
+	s.proc, s.console = h, pc
 	go func() {
 		_, _ = windows.WaitForSingleObject(h, windows.INFINITE)
 		var code uint32
@@ -153,7 +256,7 @@ func (c conpty) Write(p []byte) (int, error) { return c.in.Write(p) }
 // Windows 11 24H2, ClosePseudoConsole waits for its output to be read.
 func (s *shim) closeConsole() {
 	s.closeOnce.Do(func() {
-		go windows.ClosePseudoConsole(s.console)
+		go closePseudoConsole(s.console)
 	})
 }
 
