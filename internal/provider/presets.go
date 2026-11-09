@@ -792,6 +792,25 @@ func Presets() []PresetDef {
 	return out
 }
 
+// trimmed "on" (-X at build time) is magpie-lite: only trimmedPresets are
+// offered to add (Offered), and no partner list is fetched or offered. A
+// provider saved from any other preset reads and edits as before, and a
+// custom one still reaches any of them.
+var trimmed string
+
+var trimmedPresets = map[string]bool{
+	"anthropic": true, "openai": true, "google": true, "deepseek": true, "xai": true,
+	"moonshot": true, "moonshot-cn": true, "kimi-code": true, "kimi-code-cn": true,
+	"zhipu": true, "zai": true, "minimax": true, "minimax-cn": true,
+	// Alibaba Cloud Bailian: DashScope's API, its Token Plan, its decision model
+	"qwen-cn": true, "bailian-token-plan": true, "bailian-decision": true,
+	"ollama": true, "lmstudio": true, OMLXPreset: true, MLXServePreset: true,
+	RemoteMagpiePreset: true,
+}
+
+// Offered is whether the preset id is offered to add.
+func Offered(id string) bool { return trimmed != "on" || trimmedPresets[id] }
+
 // presetAliases are ids presets carried before, each the preset since and
 // the region it is (none: the preset's default): qianfan's first day's
 // (qianfan-token-plan, v0.1.394), and Tencent Cloud's three presets, its
