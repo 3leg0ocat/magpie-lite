@@ -196,11 +196,16 @@ func (u *updater) start() {
 	u.place(runtime.GOOS, update.GUI)
 	gateway.SetRestarter(u.restartBesideAsked) // magpie update in a terminal
 	gateway.SetForceRestarter(u.restartBesideNow)
-	gateway.SetUpdater(u.updateAsked)                   // a magpie using this one updated
-	go provider.KeepRemotesUpdated(backendCtx, Version) // and this one's remotes
-	go u.followReplaced(backendCtx)                     // the app's or magpie web's update (visamzh on X)
+	gateway.SetUpdater(u.updateAsked) // a magpie using this one updated
+	if !update.Off() {
+		go provider.KeepRemotesUpdated(backendCtx, Version) // and this one's remotes
+	}
+	go u.followReplaced(backendCtx) // the app's or magpie web's update (visamzh on X)
 	if u.bundle != "" {
 		go update.ForgetOldStaging(u.bundle) // #3965
+	}
+	if update.Off() {
+		return // the feed is never asked
 	}
 	go func() {
 		time.Sleep(5 * time.Second) // let the app settle first
@@ -938,6 +943,20 @@ func updateRoutes(mux *http.ServeMux, w Windows) {
 		noteUse(b.Open, time.Now())
 		rw.WriteHeader(http.StatusNoContent)
 	})
+	if update.Off() {
+		// the version row says only the version; nothing is checked,
+		// downloaded or put in
+		off := func(rw http.ResponseWriter, _ *http.Request) {
+			writeJSON(rw, updateJSON{State: "off", Current: Version})
+		}
+		mux.HandleFunc("GET /api/update", off)
+		mux.HandleFunc("POST /api/update/check", off)
+		mux.HandleFunc("POST /api/update/install", off)
+		mux.HandleFunc("GET /api/update/notes", func(rw http.ResponseWriter, _ *http.Request) {
+			writeJSON(rw, map[string]any{"releases": []update.Note{}})
+		})
+		return
+	}
 	mux.HandleFunc("GET /api/update", func(rw http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("fresh") == "1" { // the Version row
 			updates.refreshLatest(settings.Load())

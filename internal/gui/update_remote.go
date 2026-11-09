@@ -18,6 +18,8 @@ import (
 // write, a build from source).
 func (u *updater) updateAsked(want string) provider.RemoteUpdate {
 	switch {
+	case update.Off():
+		return provider.RemoteUpdate{State: "off"}
 	case !update.Released(Version):
 		return provider.RemoteUpdate{State: "unsupported", Why: "source"}
 	case !update.Newer(want, Version):

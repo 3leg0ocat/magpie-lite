@@ -20246,7 +20246,9 @@ function renderSettings() {
     segsOO(!s.noAutoDownload, (v) => savePrefs({ ...keep, noAutoDownload: !v }))).classList.add("update-download-row");
   row(t("Restart automatically"), s.noAutoUpdate ? t("While automatic updates are on") : t("Once an update is downloaded, restarts into it without cutting off an agent's request"), "",
     segsOO(s.autoRestart, (v) => savePrefs({ ...keep, autoRestart: v }))).classList.add("update-restart-row", ...(s.noAutoUpdate ? ["off"] : []));
-  renderUpdateMirror(row(t("Download source"), "", ""), s);
+  const mirror = row(t("Download source"), "", "");
+  mirror.classList.add("update-mirror-row");
+  renderUpdateMirror(mirror, s);
   // beside Download source, both where an update comes from (WeltAn_X on X)
   const src = el("button", "sess-pick pref-pick");
   Object.assign(src, { type: "button", id: "updateSourcePick" });
@@ -22736,6 +22738,10 @@ async function renderUpdate(r, u) {
     case "": // not asked yet: with automatic updates off, only this asks
       sub.textContent = prefs && prefs.noAutoUpdate ? t("Automatic updates are off") : "";
       btn(t("Check"), check);
+      break;
+    case "off": // a build that never updates itself: no settings for it
+      sub.textContent = "";
+      for (const x of document.querySelectorAll(".update-pill-row, .update-auto-row, .update-every-row, .update-channel-row, .update-download-row, .update-restart-row, .update-mirror-row, #updateSourceRow")) x.hidden = true;
       break;
     default: // built from source
       sub.textContent = "";
