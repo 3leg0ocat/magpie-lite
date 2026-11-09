@@ -14,10 +14,13 @@ magpie.plugin("library", (ctx) => {
 
   let lib = null;        // the page, as /api/library gives it
   let taken = 0;         // how many times lib was set, for a read to tell a newer answer came first
-  let tab = "instructions";
+  // magpie-lite keeps no Instructions or Hooks tab; what the library holds
+  // of them, and what agents were given, stays as it is
+  let tab = "mcp";
   let shown = "";        // the tab the page last drew, which fades in only when it changes
   let fits = [];         // textareas to fit before the page is painted
   try { tab = localStorage.getItem("magpie.libTab") || tab; } catch {}
+  if (tab === "instructions" || tab === "hooks") tab = "mcp";
   const texts = {};      // set → its shared instructions as typed, while not saved
   let openSet = null;    // the set of instructions opened to edit
   let addingSet = false; // a new set being named
@@ -828,10 +831,8 @@ magpie.plugin("library", (ctx) => {
     const head = el("div", "lib-head");
     const n = (k) => (counts?.[k] ? " · " + counts[k] : "");
     const tabs = segs(agentless() ? [["mcp", t("MCP servers") + n("mcp")]] : [
-      ["instructions", t("Instructions")],
       ["mcp", t("MCP servers") + n("mcp")],
       ["skills", t("Skills") + n("skills")],
-      ["hooks", t("Hooks") + n("hooks")],
       ["subagents", t("Subagents") + n("subagents")],
       ["rtk", "RTK"],
     ], tab, openTab);
