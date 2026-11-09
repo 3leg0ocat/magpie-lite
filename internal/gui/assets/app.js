@@ -20073,7 +20073,9 @@ function renderSettings() {
     segs([["off", t("Off")], ["on", t("On")]], s.noAutoDownload ? "off" : "on", (v) => savePrefs({ ...keep, noAutoDownload: v === "off" }))).classList.add("update-download-row");
   row(t("Restart automatically"), s.noAutoUpdate ? t("While automatic updates are on") : t("Once an update is downloaded, restarts into it without cutting off an agent's request"), "",
     segs([["off", t("Off")], ["on", t("On")]], s.autoRestart ? "on" : "off", (v) => savePrefs({ ...keep, autoRestart: v === "on" }))).classList.add("update-restart-row", ...(s.noAutoUpdate ? ["off"] : []));
-  renderUpdateMirror(row(t("Download source"), "", ""), s);
+  const mirror = row(t("Download source"), "", "");
+  mirror.classList.add("update-mirror-row");
+  renderUpdateMirror(mirror, s);
   const open = el("button", "text", t("Open"));
   open.onclick = () => api("settings/reveal", {}).catch(statusErr);
   // portable (a data folder beside magpie, #508): everything is in there
@@ -22481,6 +22483,10 @@ async function renderUpdate(r, u) {
     case "": // not asked yet: with automatic updates off, only this asks
       sub.textContent = prefs && prefs.noAutoUpdate ? t("Automatic updates are off") : "";
       btn(t("Check"), check);
+      break;
+    case "off": // a build that never updates itself: no settings for it
+      sub.textContent = "";
+      for (const x of document.querySelectorAll(".update-pill-row, .update-auto-row, .update-every-row, .update-channel-row, .update-download-row, .update-restart-row, .update-mirror-row")) x.hidden = true;
       break;
     default: // built from source
       sub.textContent = "";

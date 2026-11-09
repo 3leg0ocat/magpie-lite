@@ -42,6 +42,17 @@ import (
 // Site is magpie's home; its /api/latest is the update feed.
 const Site = "https://usemagpie.ai"
 
+// selfUpdate "off" (-X at build time) is a build that never asks the feed
+// or puts a release in: magpie-lite, whose Windows ConPTY fix an upstream
+// release would replace. A newer one is put in by hand.
+var selfUpdate string
+
+// ErrOff is what asking the feed says in such a build.
+var ErrOff = errors.New("this magpie doesn't update itself; put a newer build in by hand")
+
+// Off is whether this build never updates itself (selfUpdate).
+func Off() bool { return selfUpdate == "off" }
+
 // Feed is where the newest release is described. MAGPIE_UPDATE_FEED points
 // it elsewhere, for testing an update against a local server.
 func Feed() string {
@@ -104,6 +115,9 @@ func Latest(ctx context.Context) (*Release, error) { return LatestIn(ctx, "") }
 // InLang): the app's language, which What's new follows. On Settings'
 // Stable channel it is Stable's release (see Stable).
 func LatestIn(ctx context.Context, lang string) (*Release, error) {
+	if Off() {
+		return nil, ErrOff
+	}
 	req, err := http.NewRequestWithContext(ctx, "GET", withChannel(withLang(Feed(), lang)), nil)
 	if err != nil {
 		return nil, err
