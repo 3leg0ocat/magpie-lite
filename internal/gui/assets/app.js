@@ -21885,10 +21885,11 @@ function renderRedact(s, keep) {
   // the pages' Hide accounts, here too, where privacy is looked for
   if (window.hideAccounts) rowIn(share, t("Hide accounts"), t("Email addresses and account names on every page are blurred, for a screenshot to share"),
     onOff(window.hideAccounts.on(), (on) => { window.hideAccounts.set(on); renderSettings(); }));
-  rowIn(share, t("Count me as a user"), t("Once a day, a random id for this computer with magpie's version and system"),
+  // magpie-lite sends no count at all: no switches for it
+  if (!s.lite) rowIn(share, t("Count me as a user"), t("Once a day, a random id for this computer with magpie's version and system"),
     onOff(!s.noStats, (on) => savePrefs({ ...keep, noStats: !on })));
   // rides on that event: nothing goes without it
-  if (!s.noStats) rowIn(share, t("Share the agents, providers and models I use"), t("Sent with that event, by magpie's own ids, with how many of each, and how often each partner was shown, opened and added; a provider you added yourself is only “custom”. No names, addresses, accounts, keys or usage"),
+  if (!s.noStats && !s.lite) rowIn(share, t("Share the agents, providers and models I use"), t("Sent with that event, by magpie's own ids, with how many of each, and how often each partner was shown, opened and added; a provider you added yourself is only “custom”. No names, addresses, accounts, keys or usage"),
     onOff(!s.noUsageStats, (on) => savePrefs({ ...keep, noUsageStats: !on })));
   // what masking did is a page of its own, Insights › Masking
   if (!featureHides($('#nav button[data-view="masking"]'))) {

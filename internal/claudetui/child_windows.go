@@ -13,6 +13,7 @@ import (
 
 	"golang.org/x/sys/windows"
 
+	"github.com/yetone/magpie/internal/appdir"
 	"github.com/yetone/magpie/internal/proc"
 )
 
@@ -38,8 +39,10 @@ var endSignals = []os.Signal{os.Interrupt, syscall.SIGTERM}
 // conpty folder beside magpie's executable is used when there is one, and
 // one that can't be is an error, never the system's: that would lose words
 // again with nothing said. Without the folder, the system's. A build that
-// ships its own (bundle) puts it in conpty\<its version> first, and uses
-// that one alone.
+// ships its own (bundle) uses that one alone, written to magpie's cache
+// folder (conpty\<its version>) first: Windows loads a DLL and starts a
+// program only from a file, and the cache keeps it out of the folder
+// magpie.exe was put in, which needn't be writable.
 type pseudoConsole struct {
 	create, close *windows.LazyProc
 	err           error
@@ -53,18 +56,16 @@ var bundle struct {
 }
 
 var console = sync.OnceValue(func() pseudoConsole {
-	exe, err := os.Executable()
-	if err != nil && bundle.dll != nil {
-		return pseudoConsole{err: fmt.Errorf("the ConPTY magpie ships: %w", err)}
-	}
-	if err == nil {
-		dir := filepath.Join(filepath.Dir(exe), "conpty")
-		if bundle.dll != nil {
-			dir = filepath.Join(dir, bundle.version)
-			if err := unbundle(dir); err != nil {
-				return pseudoConsole{err: fmt.Errorf("the ConPTY magpie ships, put in %s: %w", dir, err)}
-			}
+	dir := ""
+	if bundle.dll != nil {
+		dir = filepath.Join(appdir.Cache(), "conpty", bundle.version)
+		if err := unbundle(dir); err != nil {
+			return pseudoConsole{err: fmt.Errorf("the ConPTY magpie ships, put in %s: %w", dir, err)}
 		}
+	} else if exe, err := os.Executable(); err == nil {
+		dir = filepath.Join(filepath.Dir(exe), "conpty")
+	}
+	if dir != "" {
 		if _, err := os.Stat(dir); err == nil {
 			if _, err := os.Stat(filepath.Join(dir, "OpenConsole.exe")); err != nil {
 				return pseudoConsole{err: fmt.Errorf("the ConPTY in %s: %w", dir, err)}
