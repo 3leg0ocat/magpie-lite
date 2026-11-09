@@ -9,6 +9,7 @@ import (
 
 	"github.com/yetone/magpie/internal/gateway"
 	"github.com/yetone/magpie/internal/mcpauth"
+	"github.com/yetone/magpie/internal/provider"
 	"github.com/yetone/magpie/internal/settings"
 )
 
@@ -112,8 +113,15 @@ func syncSteps(all, gone []*Target, b *backups, res *Result) []func(*Library) {
 	// a skill whose app moved it is followed first, for every agent to
 	// get the moved one (skill_moved.go)
 	steps := []func(*Library){func(l *Library) { l.followMovedSkills() }}
+	// magpie-lite (provider.Trimmed) gives the agents MCP servers and
+	// skills alone: what they have of the rest stays as it is
+	lite := provider.Trimmed()
 	for _, t := range all {
 		steps = append(steps, func(l *Library) {
+			if lite {
+				l.syncMCP(t, b, res)
+				return
+			}
 			l.syncInstructions(t, all, b, res, true)
 			l.syncMCP(t, b, res)
 			l.syncHooks(t, b, res)
@@ -129,8 +137,10 @@ func syncSteps(all, gone []*Target, b *backups, res *Result) []func(*Library) {
 	for _, t := range gone {
 		steps = append(steps, func(l *Library) {
 			l.syncMCP(t, b, res)
-			l.syncHooks(t, b, res)
-			l.syncEnv(t, b, res)
+			if !lite {
+				l.syncHooks(t, b, res)
+				l.syncEnv(t, b, res)
+			}
 			l.syncSkills(t, res, all)
 		})
 	}
@@ -657,7 +667,11 @@ func readView(problems []Problem, glance bool) (*View, error) {
 	// the agents are found once for the whole read: finding them looks
 	// through every agent's folders, in WSL too (#1624)
 	targets, asleep := targetsAsleep(false)
-	v := &View{Agents: []AgentView{}, Servers: []ServerView{}, Skills: []SkillView{}, FoundSkills: []FoundSkill{}, Instructions: l.instructionsView(targets, asleep), Dir: Dir(), Backups: BackupDir(), CopySkills: l.CopySkills, SharedSkills: l.SharedSkills, SharedDir: sharedSkillsDir(), AutoUpdateSkills: l.AutoUpdateSkills, MCPHub: l.MCPHub, SkillRouter: l.SkillRouter, HubPath: gateway.HubMCPPath, HubNote: settings.Shared().RouterNote, HubName: gateway.HostName(), HubAllTools: settings.Shared().RouterAllTools, Partial: glance}
+	var instr *InstructionsView
+	if !provider.Trimmed() { // magpie-lite: no Instructions to show
+		instr = l.instructionsView(targets, asleep)
+	}
+	v := &View{Agents: []AgentView{}, Servers: []ServerView{}, Skills: []SkillView{}, FoundSkills: []FoundSkill{}, Instructions: instr, Dir: Dir(), Backups: BackupDir(), CopySkills: l.CopySkills, SharedSkills: l.SharedSkills, SharedDir: sharedSkillsDir(), AutoUpdateSkills: l.AutoUpdateSkills, MCPHub: l.MCPHub, SkillRouter: l.SkillRouter, HubPath: gateway.HubMCPPath, HubNote: settings.Shared().RouterNote, HubName: gateway.HostName(), HubAllTools: settings.Shared().RouterAllTools, Partial: glance}
 	for _, t := range targets {
 		av := AgentView{ID: t.Agent.ID, Name: t.Agent.Name, Icon: t.Agent.Icon, Instructions: t.Instructions, Skills: t.Skills,
 			SkillsAlso: t.SkillsAlso, Note: t.Note, MCPVia: t.MCPVia, ProjectSkills: ProjectSkillsDir(t.Agent.ID), ProjectMCP: ProjectMCPFile(t.Agent.ID), ProjectSubagents: ProjectSubagentsDir(t.Agent.ID),
@@ -755,11 +769,14 @@ func readView(problems []Problem, glance bool) (*View, error) {
 		}
 		v.Servers = append(v.Servers, sv)
 	}
-	v.Hooks, v.HookAgents = l.hooksView(append(slices.Clone(targets), gone...), asleep, of)
-	v.Env, v.EnvAgents = l.envView(append(slices.Clone(targets), gone...), of)
-	v.Subagents, v.SubagentAgents = l.subagentsView(targets, asleep, of)
-	v.Commands, v.CommandAgents = l.commandsView(targets, asleep, of)
-	v.Plugins = l.pluginsView()
+	// magpie-lite (provider.Trimmed): MCP servers and skills alone
+	if !provider.Trimmed() {
+		v.Hooks, v.HookAgents = l.hooksView(append(slices.Clone(targets), gone...), asleep, of)
+		v.Env, v.EnvAgents = l.envView(append(slices.Clone(targets), gone...), of)
+		v.Subagents, v.SubagentAgents = l.subagentsView(targets, asleep, of)
+		v.Commands, v.CommandAgents = l.commandsView(targets, asleep, of)
+		v.Plugins = l.pluginsView()
+	}
 	tr := &tracer{}
 	for _, s := range l.Skills {
 		sv := SkillView{Name: s.Name, Bundle: s.Bundle, Agents: append([]string{}, s.Agents...), Icon: skillIcon(s), Problems: of("skill:" + s.Name), Repo: tr.repoOf(s), OffHere: s.OffHere, Note: s.Note, Router: s.Router}
