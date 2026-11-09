@@ -1,0 +1,40 @@
+# magpie-lite's Windows x64 exe (build/lite): built on a v*-lite.* tag
+# pushed to the fork and put on that tag's GitHub Release; run by hand, it
+# is kept as the run's artifact only.
+name: lite release
+
+on:
+  push:
+    tags:
+      - 'v*-lite.*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Lite checks
+        shell: bash
+        run: go test ./internal/update ./internal/provider -run '^(TestOff|TestTrimmed)' -count=1
+      - name: Package
+        shell: bash
+        run: build/lite/package-windows.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: magpie-lite-windows-x64
+          path: dist/magpie-lite-*
+      - name: Release
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/magpie-lite-* --repo "$GITHUB_REPOSITORY" --title "$GITHUB_REF_NAME" --notes-file build/lite/README.md
