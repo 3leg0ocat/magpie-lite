@@ -811,6 +811,10 @@ var trimmedPresets = map[string]bool{
 // Offered is whether the preset id is offered to add.
 func Offered(id string) bool { return trimmed != "on" || trimmedPresets[id] }
 
+// Trimmed is whether this is magpie-lite's trimmed build, whose library
+// runs only MCP servers and skills too.
+func Trimmed() bool { return trimmed == "on" }
+
 // presetAliases are ids presets carried before, each the preset since and
 // the region it is (none: the preset's default): qianfan's first day's
 // (qianfan-token-plan, v0.1.394), and Tencent Cloud's three presets, its

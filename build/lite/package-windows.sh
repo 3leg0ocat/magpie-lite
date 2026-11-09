@@ -16,10 +16,12 @@ cd "$(dirname "$0")/../.."
 CONPTY_VERSION=1.25.260930003
 CONPTY_SHA256=02b07b349af66d801159bdf9e440d4a1ce78bb951f37fc8609731665afdae7ee
 
-VERSION=${VERSION:-$(git describe --tags --always --dirty | tr -cd 'A-Za-z0-9._+-')}
-# the exe's file version: the upstream release it is built on
-WINVER=$(git describe --tags --abbrev=0 --match 'v[0-9]*' | sed -E 's/^v//; s/[^0-9.].*//')
-out=dist/magpie-lite-$VERSION-windows-x64.exe
+# the upstream release it is built on, as -lite: a release's version to
+# magpie, so a running one follows a newer build put in its place
+base=$(git describe --tags --abbrev=0 --match 'v[0-9]*' --exclude '*-*')
+VERSION=${VERSION:-$base-lite}
+WINVER=$(echo "$base" | sed -E 's/^v//; s/[^0-9.].*//')
+out=dist/magpie-lite-windows-x64.exe
 bundle=internal/claudetui/conpty-bundle
 work=$(mktemp -d)
 trap 'rm -rf "$work" rsrc_windows_*.syso internal/update/launcher-*.com; find "$bundle" -type f ! -name .gitignore -delete' EXIT

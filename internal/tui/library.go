@@ -44,21 +44,24 @@ func (m *model) reloadLibrary() {
 	}
 	m.libView = v
 	m.libAgents = v.Agents
-	ins := libRow{kind: "instructions", name: "shared instructions"}
-	if lines := strings.TrimRight(v.Instructions.Shared, "\n"); strings.TrimSpace(lines) == "" {
-		ins.about = "none yet · e writes them"
-	} else {
-		ins.about = fmt.Sprintf("%d line%s", strings.Count(lines, "\n")+1, plural(strings.Count(lines, "\n")+1))
-	}
-	for _, a := range v.Instructions.Agents {
-		if a.On {
-			ins.on = append(ins.on, a.Agent)
+	// magpie-lite (provider.Trimmed) reads no instructions
+	if v.Instructions != nil {
+		ins := libRow{kind: "instructions", name: "shared instructions"}
+		if lines := strings.TrimRight(v.Instructions.Shared, "\n"); strings.TrimSpace(lines) == "" {
+			ins.about = "none yet · e writes them"
+		} else {
+			ins.about = fmt.Sprintf("%d line%s", strings.Count(lines, "\n")+1, plural(strings.Count(lines, "\n")+1))
 		}
-		if a.Edited {
-			ins.bad++
+		for _, a := range v.Instructions.Agents {
+			if a.On {
+				ins.on = append(ins.on, a.Agent)
+			}
+			if a.Edited {
+				ins.bad++
+			}
 		}
+		m.lib = append(m.lib, ins)
 	}
-	m.lib = append(m.lib, ins)
 	for _, s := range v.Servers {
 		what := s.URL
 		if s.Command != "" {
