@@ -1,11 +1,20 @@
-# magpie-lite（Windows x64）
+# magpie-lite
 
-基于 [yetone/magpie](https://github.com/yetone/magpie) 的 Windows 精简版。对原项目的修改：
+[yetone/magpie](https://github.com/yetone/magpie) 的 Windows x64 发行版，基于上游发布版本，修改如下。
 
-- 修复 Windows 10 上 Claude Code 交互模式丢失长消息的问题（yetone/magpie#5205）：使用随程序附带的微软新版 ConPTY，不再使用系统自带的 ConPTY。
-- 不检查、不下载、不安装 magpie 自身的更新。
-- 不发送每日用户统计，不弹出 What's new。
-- 添加供应商时只列出 Anthropic、OpenAI、Google Gemini、DeepSeek、xAI、Kimi、智谱/Z.ai、MiniMax、阿里云百炼，本地的 Ollama、LM Studio、oMLX、MLX-Serve，以及 Remote magpie；不显示赞助商。
-- 资源库只保留 MCP 服务器和技能。
+## 修改
 
-订阅、插件、自定义供应商和已保存的配置不受影响。
+- **修复**：Windows 10 下 Claude Code 交互模式截断长消息的问题（[yetone/magpie#5205](https://github.com/yetone/magpie/issues/5205)）。
+- **更新**：移除自动更新、更新检查和 What's new。
+- **隐私**：不发送使用统计。
+- **供应商**：“添加供应商”仅列出以下选项，并移除赞助商推荐。
+  - 官方：Anthropic、OpenAI、Google Gemini、DeepSeek、xAI、Kimi、智谱 / Z.ai、MiniMax、阿里云百炼
+  - 本地：Ollama、LM Studio、oMLX、MLX-Serve
+  - Remote magpie
+- **资源库**：仅保留 MCP 服务器和技能。
+
+订阅、插件、自定义供应商和已有配置不受影响。
+
+## 第三方组件
+
+Microsoft.Windows.Console.ConPTY 1.25.260930003，MIT 许可，见 [ConPTY-LICENSE.txt](https://github.com/3leg0ocat/magpie-lite/blob/lite/windows/build/lite/ConPTY-LICENSE.txt)。
