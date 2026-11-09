@@ -152,7 +152,7 @@ func PluginPartners() []Partner {
 // listedPartners are every partner listed now, the add sheet's and the
 // Plugins page's.
 func listedPartners() []Partner {
-	if partnersSource() == "off" {
+	if partnersSource() == "off" || trimmed == "on" {
 		return nil
 	}
 	partnerMu.Lock()
@@ -176,7 +176,7 @@ func listedPartners() []Partner {
 // PartnersNow is Partners for a command that ends at once, before a fetch
 // behind it could: a list due is fetched first, waited for at most wait.
 func PartnersNow(wait time.Duration) []Partner {
-	if partnersSource() == "off" {
+	if partnersSource() == "off" || trimmed == "on" {
 		return nil
 	}
 	partnerMu.Lock()
@@ -203,7 +203,7 @@ func PartnersNow(wait time.Duration) []Partner {
 // added reaches an app left running within the hour, and the list kept on
 // disk is fresh for the next start.
 func KeepPartnersFresh(ctx context.Context) {
-	if partnersSource() == "off" {
+	if partnersSource() == "off" || trimmed == "on" {
 		return
 	}
 	t := time.NewTimer(0)
