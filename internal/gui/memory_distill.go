@@ -128,6 +128,9 @@ func distillComplete(ctx context.Context, model, effort, system, user string) (s
 // keepDistilling reads conversations into memory while the backend runs:
 // a few minutes after start, then every hour.
 func keepDistilling(ctx context.Context) {
+	if provider.Trimmed() {
+		return // magpie-lite keeps no memory
+	}
 	memdistill.Keep(ctx, 5*time.Minute, time.Hour, distillAuto, distillComplete)
 }
 

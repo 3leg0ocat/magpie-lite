@@ -7,6 +7,7 @@
 # A conflict stops the rebase: resolve it, `git rebase --continue`, and run
 # this again; it goes on from the checks.
 set -euo pipefail
+export TZ=UTC # the rebased commits' dates
 cd "$(dirname "$0")/../.."
 
 git diff --quiet && git diff --cached --quiet || { echo "uncommitted changes" >&2; exit 1; }

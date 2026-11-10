@@ -23,6 +23,7 @@ import (
 	"github.com/yetone/magpie/internal/appdir"
 	"github.com/yetone/magpie/internal/iconproxy"
 	"github.com/yetone/magpie/internal/lazyre"
+	"github.com/yetone/magpie/internal/provider"
 )
 
 // The market is where the page finds MCP servers and skills to add in one
@@ -363,6 +364,9 @@ func MarketServers(q string) ([]MarketServer, error) {
 	pick := func(list []MarketServer) []MarketServer {
 		var got []MarketServer
 		for _, m := range list {
+			if m.ID == memoryServerName && provider.Trimmed() {
+				continue // magpie-lite keeps no memory
+			}
 			switch {
 			case addr != "":
 				if addrScore(addr, m.addrs) > 0 {

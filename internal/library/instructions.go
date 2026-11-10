@@ -862,17 +862,20 @@ func KeepLinked(ctx context.Context, interval time.Duration) {
 		}
 		// what was ticked for a stopped WSL distro's agents, once it runs
 		keepWoken()
-		// Claude Code's auto-compaction beside a bili plugin magpie
-		// installed before it kept it on
-		keepBiliCompact()
-		// bili start, while an agent goes through its /bili/ prefix
-		keepBiliServe(ctx)
-		// once a day, what agents saved to memory meanwhile
-		if res, err := PublishMemory(true); err != nil {
-			log.Println("library: memory:", err)
-		} else if res != nil {
-			for _, p := range res.Problems {
-				log.Println("library: memory:", p.Agent, p.What, p.Error)
+		// magpie-lite (provider.Trimmed) runs no billion-context or memory
+		if !provider.Trimmed() {
+			// Claude Code's auto-compaction beside a bili plugin magpie
+			// installed before it kept it on
+			keepBiliCompact()
+			// bili start, while an agent goes through its /bili/ prefix
+			keepBiliServe(ctx)
+			// once a day, what agents saved to memory meanwhile
+			if res, err := PublishMemory(true); err != nil {
+				log.Println("library: memory:", err)
+			} else if res != nil {
+				for _, p := range res.Problems {
+					log.Println("library: memory:", p.Agent, p.What, p.Error)
+				}
 			}
 		}
 		select {

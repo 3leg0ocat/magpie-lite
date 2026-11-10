@@ -174,9 +174,10 @@ func revealable(v *library.View) []string {
 }
 
 // liteGone answers Not Found for what magpie-lite's library doesn't run
-// (provider.Trimmed): instructions, hooks, subagents and RTK.
+// (provider.Trimmed): instructions, hooks, subagents, RTK, Pi packages and
+// billion-context.
 func liteGone(rw http.ResponseWriter, r *http.Request, what string) bool {
-	if provider.Trimmed() && (what == "instructions" || what == "hooks" || what == "subagents" || what == "rtk") {
+	if provider.Trimmed() && (what == "instructions" || what == "hooks" || what == "subagents" || what == "rtk" || what == "pi" || what == "bili") {
 		http.NotFound(rw, r)
 		return true
 	}
@@ -185,8 +186,10 @@ func liteGone(rw http.ResponseWriter, r *http.Request, what string) bool {
 
 func libraryRoutes(mux *http.ServeMux, w Windows) {
 	browserRoutes(mux, w)
-	memoryRoutes(mux)
-	memoryDistillRoutes(mux)
+	if !provider.Trimmed() { // magpie-lite keeps no memory
+		memoryRoutes(mux)
+		memoryDistillRoutes(mux)
+	}
 	mux.HandleFunc("GET /api/library", func(rw http.ResponseWriter, r *http.Request) {
 		v, err := libraryRead(nil, r.URL.Query().Get("glance") == "1")
 		if err != nil {
@@ -290,9 +293,15 @@ func libraryRoutes(mux *http.ServeMux, w Windows) {
 	// each WSL distro's): switched on or off as Pi itself does it, and
 	// copied from one Pi to another
 	mux.HandleFunc("GET /api/library/pi", func(rw http.ResponseWriter, r *http.Request) {
+		if liteGone(rw, r, "pi") {
+			return
+		}
 		writeJSON(rw, library.ReadPiExtensions())
 	})
 	mux.HandleFunc("POST /api/library/pi", func(rw http.ResponseWriter, r *http.Request) {
+		if liteGone(rw, r, "pi") {
+			return
+		}
 		var in struct {
 			Pi, Ext, Pkg string
 			On           bool
@@ -318,6 +327,9 @@ func libraryRoutes(mux *http.ServeMux, w Windows) {
 		writeJSON(rw, v)
 	})
 	mux.HandleFunc("POST /api/library/pi/copy", func(rw http.ResponseWriter, r *http.Request) {
+		if liteGone(rw, r, "pi") {
+			return
+		}
 		var in struct{ From, To, Ext, Pkg string }
 		if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
 			fail(rw, err)
@@ -425,9 +437,15 @@ func libraryRoutes(mux *http.ServeMux, w Windows) {
 	// billion-context: which agents have its plugin, switching one on or
 	// off, and installing bili when the page is asked to
 	mux.HandleFunc("GET /api/library/bili", func(rw http.ResponseWriter, r *http.Request) {
+		if liteGone(rw, r, "bili") {
+			return
+		}
 		writeJSON(rw, library.ReadBili())
 	})
 	mux.HandleFunc("POST /api/library/bili", func(rw http.ResponseWriter, r *http.Request) {
+		if liteGone(rw, r, "bili") {
+			return
+		}
 		var in struct {
 			Agent string
 			On    bool
@@ -444,6 +462,9 @@ func libraryRoutes(mux *http.ServeMux, w Windows) {
 		writeJSON(rw, v)
 	})
 	mux.HandleFunc("POST /api/library/bili/install", func(rw http.ResponseWriter, r *http.Request) {
+		if liteGone(rw, r, "bili") {
+			return
+		}
 		v, err := library.InstallBili()
 		if err != nil {
 			fail(rw, err)
