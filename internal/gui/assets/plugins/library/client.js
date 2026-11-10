@@ -14,11 +14,15 @@ magpie.plugin("library", (ctx) => {
 
   let lib = null;        // the page, as /api/library gives it
   let taken = 0;         // how many times lib was set, for a read to tell a newer answer came first
-  let tab = "instructions";
+  // magpie-lite's library has MCP servers and skills alone; what it holds
+  // of the rest, and what agents were given, stays as it is
+  const liteTabs = ["mcp", "skills"];
+  let tab = "mcp";
   let shown = "";        // the tab the page last drew, which fades in only when it changes
   let fits = [];         // textareas to fit before the page is painted
   let tabPicked = false; // the reader picked the tab, here or before: with no agent the page opens on MCP otherwise
   try { const was = localStorage.getItem("magpie.libTab"); if (was) { tab = was; tabPicked = true; } } catch {}
+  if (!liteTabs.includes(tab)) tab = "mcp";
   const texts = {};      // set → its shared instructions as typed, while not saved
   let openSet = null;    // the set of instructions opened to edit
   let addingSet = false; // a new set being named
@@ -1004,7 +1008,7 @@ magpie.plugin("library", (ctx) => {
   function libHead(counts) {
     const head = el("div", "lib-head");
     const n = (k) => (counts?.[k] ? " · " + counts[k] : "");
-    const tabs = segs(agentless() ? [
+    const tabs = segs((agentless() ? [
       ["instructions", t("Instructions")],
       ["mcp", t("MCP servers") + n("mcp")],
       ["skills", t("Skills") + n("skills")],
@@ -1022,7 +1026,7 @@ magpie.plugin("library", (ctx) => {
       ["rtk", "RTK"],
       ["bili", "billion-context"],
       ...(hasPi() ? [["pi", t("Pi packages")]] : []),
-    ], tab, openTab);
+    ]).filter(([id]) => liteTabs.includes(id)), tab, openTab);
     tabs.classList.add("lib-tabs");
     head.append(tabs);
     // the buttons keep together at the end, on a line of their own when the
