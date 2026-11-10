@@ -896,23 +896,29 @@ func KeepLinked(ctx context.Context, interval time.Duration) {
 		keepWoken()
 		// a git worktree made or removed beside a project follows it
 		keepProjectTrees()
-		// Claude Code's auto-compaction beside a bili plugin magpie
-		// installed before it kept it on
-		keepBiliCompact()
-		// bili start, while an agent goes through its /bili/ prefix
-		keepBiliServe(ctx)
+		// magpie-lite (provider.Trimmed) runs no billion-context or memory
+		lite := provider.Trimmed()
+		if !lite {
+			// Claude Code's auto-compaction beside a bili plugin magpie
+			// installed before it kept it on
+			keepBiliCompact()
+			// bili start, while an agent goes through its /bili/ prefix
+			keepBiliServe(ctx)
+		}
 		// the skills and prompts of a Remote magpie's Library, when
 		// switched on (borrow.go)
 		keepBorrowed(ctx)
 		// the models a Remote magpie's agents are on, for the agents
 		// here still on them (agent/remote_picks.go)
 		agent.FollowRemotePicks(ctx)
-		// once a day, what agents saved to memory meanwhile
-		if res, err := PublishMemory(true); err != nil {
-			log.Println("library: memory:", err)
-		} else if res != nil {
-			for _, p := range res.Problems {
-				log.Println("library: memory:", p.Agent, p.What, p.Error)
+		if !lite {
+			// once a day, what agents saved to memory meanwhile
+			if res, err := PublishMemory(true); err != nil {
+				log.Println("library: memory:", err)
+			} else if res != nil {
+				for _, p := range res.Problems {
+					log.Println("library: memory:", p.Agent, p.What, p.Error)
+				}
 			}
 		}
 		select {
