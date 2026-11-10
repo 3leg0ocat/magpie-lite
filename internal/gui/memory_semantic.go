@@ -9,11 +9,17 @@ import (
 
 	"github.com/yetone/magpie/internal/memembed"
 	"github.com/yetone/magpie/internal/memory"
+	"github.com/yetone/magpie/internal/provider"
 )
 
 // keepEmbedding reads new memories for search by meaning while the
 // backend runs, when it is switched on (memembed.Keep).
-func keepEmbedding(ctx context.Context) { memembed.Keep(ctx, time.Minute) }
+func keepEmbedding(ctx context.Context) {
+	if provider.Trimmed() {
+		return // magpie-lite keeps no memory
+	}
+	memembed.Keep(ctx, time.Minute)
+}
 
 func memorySemanticRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/memory/semantic", func(rw http.ResponseWriter, r *http.Request) {

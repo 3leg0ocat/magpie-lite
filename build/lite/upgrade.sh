@@ -7,6 +7,7 @@
 # A conflict stops the rebase: resolve it, `git rebase --continue`, and run
 # this again; it goes on from the checks.
 set -euo pipefail
+export TZ=UTC # the rebased commits' dates
 cd "$(dirname "$0")/../.."
 
 git diff --quiet && git diff --cached --quiet || { echo "uncommitted changes" >&2; exit 1; }
@@ -16,6 +17,11 @@ new=${1:-$(git tag -l 'v[0-9]*' --sort=-v:refname | grep -v -- - | head -1)}
 if [ "$old" != "$new" ]; then
 	echo "rebasing from $old onto $new"
 	git rebase --onto "$new" "$old"
+fi
+# a commit made while resolving a conflict, outside this script, is put in
+# UTC too
+if git log --format='%ad%n%cd' --date=raw "$new..HEAD" | grep -qv ' +0000$'; then
+	git rebase -q --force-rebase --exec 'git commit -q --amend --no-edit --date="$(git log -1 --format=%ad --date=format-local:%Y-%m-%dT%H:%M:%S+0000)"' "$new"
 fi
 
 go vet ./internal/claudetui ./internal/update ./internal/provider ./internal/library ./internal/gui ./internal/cli
