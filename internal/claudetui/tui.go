@@ -91,6 +91,9 @@ type shim struct {
 	rowsMu sync.Mutex
 	rows   int
 	rowsCh chan struct{}
+	// said is the words of the messages that reached the transcript since
+	// one was sent, to check it whole (whole.go); nil when none is
+	said []string
 	// a turn is going: from a message's row to the turn's end
 	busy bool
 
@@ -776,7 +779,8 @@ func (s *shim) input(r io.Reader) error {
 			err = s.send(pieces)
 			s.dropImages()
 			var unpasted *imageUnpasted
-			if errors.As(err, &unpasted) {
+			var cut *messageCut
+			if errors.As(err, &unpasted) || errors.As(err, &cut) {
 				// the prompt holds the path as words: the turn is told
 				// it failed, for the bridge to ask it as claude -p, and
 				// this Claude Code ends with it
@@ -1258,7 +1262,9 @@ func pasteClean(text string) string {
 func (s *shim) send(pieces []piece) error {
 	s.rowsMu.Lock()
 	before, busy := s.rows, s.busy
+	s.said = []string{} // kept from now on (heard)
 	s.rowsMu.Unlock()
+	var pasted strings.Builder // the words pasted, to check them whole
 	marker := 0
 	for i, p := range pieces {
 		var err error
@@ -1276,6 +1282,8 @@ func (s *shim) send(pieces []piece) error {
 		if i == 0 && len(pieces) == 1 && strings.TrimSpace(p.text) == "" {
 			p.text = "."
 		}
+		pasted.WriteString(p.text)
+		pasted.WriteByte('\n')
 		s.clearScreen()
 		if _, err := io.WriteString(s.pty, "\x1b[200~"+p.text+"\x1b[201~"); err != nil {
 			return err
@@ -1295,7 +1303,7 @@ func (s *shim) send(pieces []piece) error {
 			sent := s.rows > before
 			s.rowsMu.Unlock()
 			if sent {
-				return nil
+				return s.checkWhole(pasted.String())
 			}
 			select {
 			case <-s.rowsCh:

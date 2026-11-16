@@ -48,6 +48,7 @@ func (t *translator) row(b []byte) {
 		APIStatus     int             `json:"apiErrorStatus"`
 		ToolUseResult json.RawMessage `json:"toolUseResult"`
 		Operation     string          `json:"operation"`
+		Content       string          `json:"content"`
 		APIParams     struct {
 			RateLimitInfo json.RawMessage `json:"rate_limit_info"`
 		} `json:"apiErrorParams"`
@@ -60,11 +61,13 @@ func (t *translator) row(b []byte) {
 	case "queue-operation":
 		// a message sent mid-turn waits in Claude Code's queue
 		if r.Operation == "enqueue" {
+			t.heard(func() string { return r.Content })
 			t.out.sawRow()
 		}
 	case "user":
 		if !r.IsMeta && isPrompt(r.Message) {
 			t.failed = false
+			t.heard(func() string { return promptWords(r.Message) })
 			t.out.sawRow()
 		}
 		if len(r.ToolUseResult) > 0 && r.ToolUseResult[0] == '{' {
