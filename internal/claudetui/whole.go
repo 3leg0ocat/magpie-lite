@@ -18,9 +18,8 @@ import (
 // of a paste (Windows 10's own ConPTY drops a long paste's marks and some
 // of its blocks, #5205) gives Claude Code the rest, or the whole taken as
 // many pastes with tags in the middle of its words, and the model answers
-// that with nothing said. One that isn't whole ends the turn as
-// Unpastable, before any of its reply, so the bridge asks it again as
-// claude -p, which is sent the message itself.
+// that with nothing said. One that isn't whole ends the turn as a 400,
+// before any of its reply, for the user to send it again (cutTold).
 // What Claude Code makes of the message once it has it is its own: a
 // path it took as an image, as it says, isn't missing (sameWordsBut).
 
@@ -442,6 +441,24 @@ func promptRow(raw json.RawMessage) heardRow {
 	}
 	h.words = b.String()
 	return h
+}
+
+// messageNotWhole begins the error a turn ends in when Claude Code didn't
+// get its message whole.
+const messageNotWhole = "this message didn't reach Claude Code whole and wasn't answered; send it again: "
+
+// cutTold ends the turn of a message Claude Code didn't get whole, when
+// err says so: as a 400, for the user to send it again. Not Unpastable,
+// which the bridge asks again as claude -p (counted at about twice the
+// interactive mode's), nor a 502, which a client asks again at once.
+func (s *shim) cutTold(err error) bool {
+	var cut *messageCut
+	if !errors.As(err, &cut) {
+		return false
+	}
+	s.tell(map[string]any{"type": "result", "subtype": "error_during_execution", "is_error": true, "session_id": s.sid,
+		"result": messageNotWhole + err.Error(), "api_error_status": 400})
+	return true
 }
 
 // tell writes v past what is held (hold): a turn's failure.
