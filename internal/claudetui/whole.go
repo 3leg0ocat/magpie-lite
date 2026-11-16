@@ -1,8 +1,10 @@
 package claudetui
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"slices"
 	"strings"
 	"time"
@@ -161,13 +163,21 @@ type heardRow struct {
 
 // wholeIn is nil when one of the messages the transcript recorded since one
 // was sent (said) has the words pasted (sent) and its images, or when it
-// recorded none it could read.
+// recorded none it could read, or one with more images than were pasted.
 func wholeIn(sent string, images int, said []heardRow) error {
 	if len(said) == 0 {
 		return nil
 	}
 	got, gotImages, whole := 0, images, false
 	for _, h := range said {
+		// Claude Code took words of the paste as an image: a part of a
+		// line that is an image file's path, by rules of its own that
+		// change with its versions (2.1.319: a line split before each
+		// absolute path in it), and recorded the image without them.
+		// Its words aren't the paste's, and aren't compared.
+		if h.images > images {
+			return nil
+		}
 		if !sameWords(sent, h.words) {
 			got = max(got, letters(h.words))
 			continue
@@ -187,6 +197,7 @@ func wholeIn(sent string, images int, said []heardRow) error {
 // checkWhole is wholeIn for a message just sent, given wholeWait for the
 // row that is its.
 func (s *shim) checkWhole(sent string, images int) error {
+	s.hold()
 	by := time.After(wholeWait)
 	for {
 		s.rowsMu.Lock()
@@ -194,14 +205,14 @@ func (s *shim) checkWhole(sent string, images int) error {
 		s.rowsMu.Unlock()
 		err := wholeIn(sent, images, said)
 		if err == nil {
-			return nil
+			return s.unhold(nil)
 		}
 		select {
 		case <-s.rowsCh:
 		case <-by:
-			return err
+			return s.unhold(err)
 		case <-s.exited:
-			return err
+			return s.unhold(err)
 		}
 	}
 }
@@ -273,4 +284,40 @@ func promptRow(raw json.RawMessage) heardRow {
 	}
 	h.words = b.String()
 	return h
+}
+
+// hold keeps what Claude Code answers while its message is checked: it
+// asks Anthropic as soon as it records the message (25ms after), and a
+// quick model answered words cut, its result let out, within the time
+// waited for the message's other rows (wholeWait): the check's error came
+// after the turn had ended (Haiku, 64K on Windows 10's console).
+func (s *shim) hold() {
+	s.outMu.Lock()
+	s.held = new(bytes.Buffer)
+	s.outMu.Unlock()
+}
+
+// unhold lets out what was held when the message was whole (err nil),
+// and drops it, and all after it, when it wasn't: the turn's failure is
+// told past it (tell).
+func (s *shim) unhold(err error) error {
+	s.outMu.Lock()
+	defer s.outMu.Unlock()
+	if err != nil {
+		s.held = io.Discard
+		return err
+	}
+	if b, ok := s.held.(*bytes.Buffer); ok {
+		_, _ = s.out.Write(b.Bytes())
+	}
+	s.held = nil
+	return nil
+}
+
+// tell writes v past what is held (hold): a turn's failure.
+func (s *shim) tell(v any) {
+	b, _ := json.Marshal(v)
+	s.outMu.Lock()
+	defer s.outMu.Unlock()
+	_, _ = s.out.Write(append(b, '\n'))
 }

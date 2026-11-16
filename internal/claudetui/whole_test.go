@@ -39,6 +39,9 @@ func TestWholeIn(t *testing.T) {
 		{"an image alone", "", nil, true, 1, []heardRow{{"[Image #1]", 1}}},
 		{"a queued row says no images", "look\n", nil, true, 1, []heardRow{{"look", -1}}},
 		{"images, but a word lost", "look here\n", nil, false, 1, []heardRow{{"look", 1}}},
+		// image files' paths Claude Code took as the images (planner2, 2.1.319)
+		{"paths taken as images", "C:\\a\\x.png\nlook\nC:\\a\\y.png C:\\a\\z.png\n", nil, true, 0, []heardRow{{"[Image #1] [Image #2] [Image #3]look", 3}}},
+		{"paths taken beside images pasted", "look\n\nx.png\n", nil, true, 1, []heardRow{{"[Image #1] [Image #2]look", 2}}},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -79,5 +82,35 @@ func TestWordsSkipRange(t *testing.T) {
 		if unicode.IsSpace(r) || unicode.Is(unicode.Cf, r) {
 			t.Fatalf("%U is white space or a format character", r)
 		}
+	}
+}
+
+// TestHold: what Claude Code answers while its message is checked is let
+// out after the check when the message was whole, and never when it
+// wasn't, the check's error alone told.
+func TestHold(t *testing.T) {
+	var b strings.Builder
+	s := &shim{out: &b, sid: "s1"}
+	s.hold()
+	s.emit(map[string]any{"type": "stream_event"})
+	if b.Len() > 0 {
+		t.Fatal("an answer got out while its message was checked")
+	}
+	if s.unhold(nil) != nil || !strings.Contains(b.String(), "stream_event") {
+		t.Fatalf("a whole message's answer wasn't let out: %q", b.String())
+	}
+	s.emit(map[string]any{"type": "assistant"})
+	if !strings.Contains(b.String(), "assistant") {
+		t.Fatal("held after the check")
+	}
+	b.Reset()
+	s.hold()
+	s.emit(map[string]any{"type": "stream_event"})
+	err := s.unhold(&messageCut{got: 1, sent: 2})
+	s.emit(map[string]any{"type": "result", "subtype": "success"})
+	s.tell(map[string]any{"type": "result", "is_error": true, "result": Unpastable + err.Error()})
+	if strings.Contains(b.String(), "stream_event") || strings.Contains(b.String(), "success") ||
+		!strings.Contains(b.String(), Unpastable) {
+		t.Fatalf("a cut message's answer got out: %q", b.String())
 	}
 }
