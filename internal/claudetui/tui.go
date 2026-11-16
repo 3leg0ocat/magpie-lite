@@ -96,6 +96,8 @@ type shim struct {
 	// said is the words of the messages that reached the transcript since
 	// one was sent, to check it whole (whole.go); nil when none is
 	said []heardRow
+	// taken is the image files' paths Claude Code took as images meanwhile
+	taken []string
 	// a turn is going: from a message's row to the turn's end
 	busy bool
 

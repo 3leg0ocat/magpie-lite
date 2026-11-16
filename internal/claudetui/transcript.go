@@ -70,6 +70,9 @@ func (t *translator) row(b []byte) {
 			t.heard(func() heardRow { return promptRow(r.Message) })
 			t.out.sawRow()
 		}
+		if r.IsMeta {
+			t.heardTaken(r.Message)
+		}
 		if len(r.ToolUseResult) > 0 && r.ToolUseResult[0] == '{' {
 			t.out.emit(map[string]any{"type": "user", "tool_use_result": r.ToolUseResult})
 		}

@@ -3,6 +3,7 @@ package claudetui
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"slices"
@@ -20,6 +21,8 @@ import (
 // that with nothing said. One that isn't whole ends the turn as
 // Unpastable, before any of its reply, so the bridge asks it again as
 // claude -p, which is sent the message itself.
+// What Claude Code makes of the message once it has it is its own: a
+// path it took as an image, as it says, isn't missing (sameWordsBut).
 
 // wholeWait is how long a message whose words no row holds yet waits for
 // another row, in case the one read wasn't its.
@@ -127,6 +130,77 @@ func sameWords(a, b string) bool {
 	}
 }
 
+// sameWordsBut is sameWords with any of taken, each once, left out of a
+// where b doesn't hold it: an image file's path Claude Code took as the
+// image, as it says in a row after the message's (imageSources). n is
+// how many were left out. With none taken it is sameWords, no copy made.
+func sameWordsBut(a, b string, taken []string) (same bool, n int) {
+	if len(taken) == 0 {
+		return sameWords(a, b), 0
+	}
+	used := make([]bool, len(taken))
+	x, y := words{s: a}, words{s: b}
+	for {
+		if end := takenAt(x, y, taken, used); end > 0 {
+			x.i, x.space = end, x.began
+			n++
+			continue
+		}
+		r := x.next()
+		if r != y.next() {
+			return false, n
+		}
+		if r < 0 {
+			return true, n
+		}
+	}
+}
+
+// takenAt is where in x's words one of taken not yet used ends, quoted or
+// not, when it is x's next word whole and y doesn't go on with it (Claude
+// Code left it there): 0 when none is.
+func takenAt(x, y words, taken []string, used []bool) int {
+	at := x
+	switch r := at.next(); {
+	case r == ' ':
+		// at.i is the next word's first byte
+	case r < 0 || x.began:
+		return 0
+	default:
+		at.i -= utf8.RuneLen(r)
+	}
+	s := x.s[at.i:]
+	for k, p := range taken {
+		end := 0
+		switch {
+		case used[k] || p == "":
+			continue
+		case strings.HasPrefix(s, p):
+			end = len(p)
+		case len(s) > len(p)+1 && (s[0] == '"' || s[0] == '\'') && strings.HasPrefix(s[1:], p) && s[1+len(p)] == s[0]:
+			end = len(p) + 2
+		default:
+			continue
+		}
+		if end < len(s) && !(s[end] < utf8.RuneSelf && asciiSpace[s[end]]) || sameUpTo(x, y, at.i+end) {
+			continue
+		}
+		used[k] = true
+		return at.i + end
+	}
+	return 0
+}
+
+// sameUpTo is whether y goes on as x does till x has read up to stop.
+func sameUpTo(x, y words, stop int) bool {
+	for x.i < stop {
+		if r := x.next(); r < 0 || r != y.next() {
+			return false
+		}
+	}
+	return true
+}
+
 // letters counts s's characters as words reads them, its spaces aside.
 func letters(s string) int {
 	w, n := words{s: s}, 0
@@ -163,29 +237,31 @@ type heardRow struct {
 
 // wholeIn is nil when one of the messages the transcript recorded since one
 // was sent (said) has the words pasted (sent) and its images, or when it
-// recorded none it could read, or one with more images than were pasted.
-func wholeIn(sent string, images int, said []heardRow) error {
+// recorded none it could read. Claude Code takes a pasted image file's
+// path as the image, by rules of its own, and says which it took (taken):
+// those are left out of the words, and their images out of the count.
+func wholeIn(sent string, images int, said []heardRow, taken []string) error {
 	if len(said) == 0 {
 		return nil
 	}
-	got, gotImages, whole := 0, images, false
+	got, gotImages, whole, unexplained := 0, images, false, false
 	for _, h := range said {
-		// Claude Code took words of the paste as an image: a part of a
-		// line that is an image file's path, by rules of its own that
-		// change with its versions (2.1.319: a line split before each
-		// absolute path in it), and recorded the image without them.
-		// Its words aren't the paste's, and aren't compared.
-		if h.images > images {
-			return nil
+		if extra := h.images - images; extra > 0 && pathsIn(sent, taken) < extra {
+			unexplained = true
+			continue
 		}
-		if !sameWords(sent, h.words) {
+		same, n := sameWordsBut(sent, h.words, taken)
+		if !same {
 			got = max(got, letters(h.words))
 			continue
 		}
-		if h.images < 0 || h.images >= images {
+		if h.images < 0 || h.images-n >= images {
 			return nil
 		}
-		whole, gotImages = true, h.images
+		whole, gotImages = true, max(0, h.images-n)
+	}
+	if unexplained {
+		return errUnexplained
 	}
 	cut := &messageCut{got: got, sent: letters(sent), gotImages: gotImages, sentImages: images}
 	if whole {
@@ -194,26 +270,49 @@ func wholeIn(sent string, images int, said []heardRow) error {
 	return cut
 }
 
+// errUnexplained is a row with more images than were pasted, for which
+// Claude Code hasn't said (yet) that it took as many of the paste's
+// paths: one it doesn't say, says late or says otherwise (a path it
+// made its own) isn't judged, rather than failed each time it is sent.
+var errUnexplained = errors.New("Claude Code took words of the message as images it didn't name")
+
+// pathsIn counts the paths of taken that sent holds.
+func pathsIn(sent string, taken []string) int {
+	n := 0
+	for _, p := range taken {
+		if p != "" && strings.Contains(sent, p) {
+			n++
+		}
+	}
+	return n
+}
+
 // checkWhole is wholeIn for a message just sent, given wholeWait for the
-// row that is its.
+// row that is its, and for what Claude Code says it took as images.
 func (s *shim) checkWhole(sent string, images int) error {
 	s.hold()
 	by := time.After(wholeWait)
 	for {
 		s.rowsMu.Lock()
-		said := slices.Clone(s.said)
+		said, taken := slices.Clone(s.said), slices.Clone(s.taken)
 		s.rowsMu.Unlock()
-		err := wholeIn(sent, images, said)
+		err := wholeIn(sent, images, said, taken)
 		if err == nil {
 			return s.unhold(nil)
 		}
 		select {
 		case <-s.rowsCh:
+			continue
 		case <-by:
-			return s.unhold(err)
 		case <-s.exited:
-			return s.unhold(err)
+			if !errors.Is(err, errUnexplained) {
+				err = fmt.Errorf("%w; Claude Code ended (%v): %s", err, s.exit, s.lastScreen())
+			}
 		}
+		if errors.Is(err, errUnexplained) {
+			err = nil
+		}
+		return s.unhold(err)
 	}
 }
 
@@ -238,11 +337,70 @@ func (s *shim) heard(row func() heardRow) {
 	s.rowsMu.Unlock()
 }
 
-// heardAll ends what heard keeps, as send returns.
+// heardTaken keeps the image files' paths Claude Code says, in a row after
+// a message's, it took as the images, while one sent is checked, and has
+// it checked again.
+func (s *shim) heardTaken(raw json.RawMessage) {
+	s.rowsMu.Lock()
+	checking := s.said != nil
+	s.rowsMu.Unlock()
+	if !checking {
+		return
+	}
+	paths := imageSources(raw)
+	if len(paths) == 0 {
+		return
+	}
+	s.rowsMu.Lock()
+	if s.said != nil {
+		s.taken = append(s.taken, paths...)
+	}
+	s.rowsMu.Unlock()
+	select {
+	case s.rowsCh <- struct{}{}:
+	default:
+	}
+}
+
+// heardAll ends what heard and heardTaken keep, as send returns.
 func (s *shim) heardAll() {
 	s.rowsMu.Lock()
-	s.said = nil
+	s.said, s.taken = nil, nil
 	s.rowsMu.Unlock()
+}
+
+// heardTaken tells an emitter that checks messages whole (shim) of a meta
+// row, which may say what Claude Code took as images.
+func (t *translator) heardTaken(raw json.RawMessage) {
+	if h, ok := t.out.(interface{ heardTaken(json.RawMessage) }); ok {
+		h.heardTaken(raw)
+	}
+}
+
+// imageSource begins a text block of the meta row Claude Code records
+// after a message for each image file's path it took as the image:
+// "[Image: source: C:\a\x.png]" (2.1.319).
+const imageSource = "[Image: source: "
+
+// imageSources is the paths a meta row says were taken as images.
+func imageSources(raw json.RawMessage) []string {
+	if !bytes.Contains(raw, []byte(imageSource)) {
+		return nil
+	}
+	var m struct {
+		Content []struct {
+			Type string `json:"type"`
+			Text string `json:"text"`
+		} `json:"content"`
+	}
+	_ = json.Unmarshal(raw, &m)
+	var paths []string
+	for _, b := range m.Content {
+		if p, ok := strings.CutPrefix(b.Text, imageSource); ok && b.Type == "text" && strings.HasSuffix(p, "]") {
+			paths = append(paths, p[:len(p)-1])
+		}
+	}
+	return paths
 }
 
 // heard tells an emitter that checks messages whole (shim) what one that
@@ -286,6 +444,14 @@ func promptRow(raw json.RawMessage) heardRow {
 	return h
 }
 
+// tell writes v past what is held (hold): a turn's failure.
+func (s *shim) tell(v any) {
+	b, _ := json.Marshal(v)
+	s.outMu.Lock()
+	defer s.outMu.Unlock()
+	_, _ = s.out.Write(append(b, '\n'))
+}
+
 // hold keeps what Claude Code answers while its message is checked: it
 // asks Anthropic as soon as it records the message (25ms after), and a
 // quick model answered words cut, its result let out, within the time
@@ -312,12 +478,4 @@ func (s *shim) unhold(err error) error {
 	}
 	s.held = nil
 	return nil
-}
-
-// tell writes v past what is held (hold): a turn's failure.
-func (s *shim) tell(v any) {
-	b, _ := json.Marshal(v)
-	s.outMu.Lock()
-	defer s.outMu.Unlock()
-	_, _ = s.out.Write(append(b, '\n'))
 }
