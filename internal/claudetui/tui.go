@@ -93,7 +93,7 @@ type shim struct {
 	rowsCh chan struct{}
 	// said is the words of the messages that reached the transcript since
 	// one was sent, to check it whole (whole.go); nil when none is
-	said []string
+	said []heardRow
 	// a turn is going: from a message's row to the turn's end
 	busy bool
 
@@ -1262,13 +1262,15 @@ func pasteClean(text string) string {
 func (s *shim) send(pieces []piece) error {
 	s.rowsMu.Lock()
 	before, busy := s.rows, s.busy
-	s.said = []string{} // kept from now on (heard)
+	s.said = []heardRow{} // kept from now on (heard)
 	s.rowsMu.Unlock()
 	var pasted strings.Builder // the words pasted, to check them whole
+	images := 0
 	marker := 0
 	for i, p := range pieces {
 		var err error
 		if p.image != "" {
+			images++
 			if marker, err = s.pasteImage(s.path(p.image), marker); err != nil {
 				return err
 			}
@@ -1303,7 +1305,7 @@ func (s *shim) send(pieces []piece) error {
 			sent := s.rows > before
 			s.rowsMu.Unlock()
 			if sent {
-				return s.checkWhole(pasted.String())
+				return s.checkWhole(pasted.String(), images)
 			}
 			select {
 			case <-s.rowsCh:

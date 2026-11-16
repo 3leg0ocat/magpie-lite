@@ -137,36 +137,56 @@ func letters(s string) int {
 }
 
 // messageCut is a message Claude Code recorded otherwise than it was
-// pasted: got and sent count its characters, white space aside.
-type messageCut struct{ got, sent int }
+// pasted: got and sent count its characters, white space aside, and
+// gotImages and sentImages its images when its words were whole.
+type messageCut struct{ got, sent, gotImages, sentImages int }
 
 func (e *messageCut) Error() string {
-	if e.got < e.sent {
+	switch {
+	case e.gotImages < e.sentImages:
+		return fmt.Sprintf("Claude Code recorded %d of the message's %d images%s", e.gotImages, e.sentImages, cutHint())
+	case e.got < e.sent:
 		return fmt.Sprintf("Claude Code recorded %d of the message's %d characters%s", e.got, e.sent, cutHint())
 	}
 	return "Claude Code recorded the message otherwise than it was pasted" + cutHint()
 }
 
+// heardRow is what the transcript recorded of a message: its words, and
+// how many images it holds, -1 where a row doesn't say (a queued
+// message's, which is its words alone).
+type heardRow struct {
+	words  string
+	images int
+}
+
 // wholeIn is nil when one of the messages the transcript recorded since one
-// was sent (said) has the words pasted (sent), or when it recorded none it
-// could read.
-func wholeIn(sent string, said []string) error {
+// was sent (said) has the words pasted (sent) and its images, or when it
+// recorded none it could read.
+func wholeIn(sent string, images int, said []heardRow) error {
 	if len(said) == 0 {
 		return nil
 	}
-	most := 0
-	for _, w := range said {
-		if sameWords(sent, w) {
+	got, gotImages, whole := 0, images, false
+	for _, h := range said {
+		if !sameWords(sent, h.words) {
+			got = max(got, letters(h.words))
+			continue
+		}
+		if h.images < 0 || h.images >= images {
 			return nil
 		}
-		most = max(most, letters(w))
+		whole, gotImages = true, h.images
 	}
-	return &messageCut{got: most, sent: letters(sent)}
+	cut := &messageCut{got: got, sent: letters(sent), gotImages: gotImages, sentImages: images}
+	if whole {
+		cut.got = cut.sent
+	}
+	return cut
 }
 
 // checkWhole is wholeIn for a message just sent, given wholeWait for the
-// row that is its. The rows' words are kept only while it waits (heard).
-func (s *shim) checkWhole(sent string) error {
+// row that is its. The rows are kept only while it waits (heard).
+func (s *shim) checkWhole(sent string, images int) error {
 	defer func() {
 		s.rowsMu.Lock()
 		s.said = nil
@@ -177,7 +197,7 @@ func (s *shim) checkWhole(sent string) error {
 		s.rowsMu.Lock()
 		said := slices.Clone(s.said)
 		s.rowsMu.Unlock()
-		err := wholeIn(sent, said)
+		err := wholeIn(sent, images, said)
 		if err == nil {
 			return nil
 		}
@@ -191,59 +211,64 @@ func (s *shim) checkWhole(sent string) error {
 	}
 }
 
-// heard keeps the words of a message that reached the transcript while
-// one sent is checked (said isn't nil from send to checkWhole's end); a
-// row of one comes before its sawRow. words is read only then.
-func (s *shim) heard(words func() string) {
+// heard keeps what a message that reached the transcript holds while one
+// sent is checked (said isn't nil from send to checkWhole's end); a row of
+// one comes before its sawRow. row is read only then.
+func (s *shim) heard(row func() heardRow) {
 	s.rowsMu.Lock()
 	checking := s.said != nil
 	s.rowsMu.Unlock()
 	if !checking {
 		return
 	}
-	w := words()
-	if w == "" {
+	h := row()
+	if h.words == "" && h.images <= 0 {
 		return
 	}
 	s.rowsMu.Lock()
 	if s.said != nil {
-		s.said = append(s.said, w)
+		s.said = append(s.said, h)
 	}
 	s.rowsMu.Unlock()
 }
 
-// heard tells an emitter that checks messages whole (shim) the words of
-// one that reached the transcript.
-func (t *translator) heard(words func() string) {
-	if h, ok := t.out.(interface{ heard(func() string) }); ok {
-		h.heard(words)
+// heard tells an emitter that checks messages whole (shim) what one that
+// reached the transcript holds.
+func (t *translator) heard(row func() heardRow) {
+	if h, ok := t.out.(interface{ heard(func() heardRow) }); ok {
+		h.heard(row)
 	}
 }
 
-// promptWords is the words of a user row's message: its text, or its
-// text blocks one after another.
-func promptWords(raw json.RawMessage) string {
+// promptRow is what a user row's message holds: its text, or its text
+// blocks one after another, and its image blocks.
+func promptRow(raw json.RawMessage) heardRow {
 	var m struct {
 		Content json.RawMessage `json:"content"`
 	}
 	if json.Unmarshal(raw, &m) != nil {
-		return ""
+		return heardRow{}
 	}
 	var s string
 	if json.Unmarshal(m.Content, &s) == nil {
-		return s
+		return heardRow{words: s}
 	}
 	var blocks []struct {
 		Type string `json:"type"`
 		Text string `json:"text"`
 	}
 	_ = json.Unmarshal(m.Content, &blocks)
+	var h heardRow
 	var b strings.Builder
 	for _, bl := range blocks {
-		if bl.Type == "text" {
+		switch bl.Type {
+		case "text":
 			b.WriteString(bl.Text)
 			b.WriteString("\n")
+		case "image":
+			h.images++
 		}
 	}
-	return b.String()
+	h.words = b.String()
+	return h
 }
