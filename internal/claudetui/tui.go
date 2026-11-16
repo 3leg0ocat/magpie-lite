@@ -1262,8 +1262,9 @@ func pasteClean(text string) string {
 func (s *shim) send(pieces []piece) error {
 	s.rowsMu.Lock()
 	before, busy := s.rows, s.busy
-	s.said = []heardRow{} // kept from now on (heard)
+	s.said = []heardRow{} // kept from now on (heard), till send returns
 	s.rowsMu.Unlock()
+	defer s.heardAll()
 	var pasted strings.Builder // the words pasted, to check them whole
 	images := 0
 	marker := 0

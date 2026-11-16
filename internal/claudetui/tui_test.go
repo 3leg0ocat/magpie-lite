@@ -236,6 +236,24 @@ func fakeChrome(r *bufio.Reader, how string) {
 // image file before it takes them in: one that ends naming one.
 var namesImage = regexp.MustCompile(`(?im)\.(png|jpe?g|gif|webp)[ \t]*$`)
 
+// fakeImage is an image the fake took in, as its prompt holds it.
+var fakeImage = regexp.MustCompile(`\[Image #(\d+):([^\]]*)\]`)
+
+// fakeUserRow is a message's content as Claude Code's transcript records
+// it: its words, each image's mark "[Image #<n>]" and, with images, the
+// images as blocks after them (whole.go reads it so).
+func fakeUserRow(typed string) any {
+	m := fakeImage.FindAllStringSubmatch(typed, -1)
+	if len(m) == 0 {
+		return typed
+	}
+	content := []any{map[string]any{"type": "text", "text": fakeImage.ReplaceAllString(typed, "[Image #$1]")}}
+	for _, img := range m {
+		content = append(content, map[string]any{"type": "image", "source": map[string]any{"type": "base64", "media_type": "image/png", "data": base64.StdEncoding.EncodeToString([]byte(img[2]))}})
+	}
+	return content
+}
+
 // nameWait is how long the fake takes words that name an image file to
 // take in. Claude Code took 0.45s, asking the clipboard for the file; the
 // fake's is longer than its image's 200ms and the Enter after it, for an
@@ -438,6 +456,7 @@ func fakeClaude(args []string) {
 			continue
 		}
 		line := typed.String()
+		asTyped := line // what the transcript records, as Claude Code does (fakeUserRow)
 		typed.Reset()
 		drawn.Reset()
 		mu.Unlock()
@@ -513,7 +532,7 @@ func fakeClaude(args []string) {
 		}
 		f, _ := os.OpenFile(filepath.Join(dir, sid+".jsonl"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
 		rows := []any{
-			map[string]any{"type": "user", "message": map[string]any{"role": "user", "content": line}},
+			map[string]any{"type": "user", "message": map[string]any{"role": "user", "content": fakeUserRow(asTyped)}},
 			map[string]any{"type": "assistant", "requestId": "req_1", "message": map[string]any{"id": "msg_1", "model": "claude-haiku", "role": "assistant",
 				"content": []any{map[string]any{"type": "text", "text": "echo: " + line}}}},
 			map[string]any{"type": "system", "subtype": "turn_duration"},

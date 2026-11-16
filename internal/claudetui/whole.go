@@ -185,13 +185,8 @@ func wholeIn(sent string, images int, said []heardRow) error {
 }
 
 // checkWhole is wholeIn for a message just sent, given wholeWait for the
-// row that is its. The rows are kept only while it waits (heard).
+// row that is its.
 func (s *shim) checkWhole(sent string, images int) error {
-	defer func() {
-		s.rowsMu.Lock()
-		s.said = nil
-		s.rowsMu.Unlock()
-	}()
 	by := time.After(wholeWait)
 	for {
 		s.rowsMu.Lock()
@@ -229,6 +224,13 @@ func (s *shim) heard(row func() heardRow) {
 	if s.said != nil {
 		s.said = append(s.said, h)
 	}
+	s.rowsMu.Unlock()
+}
+
+// heardAll ends what heard keeps, as send returns.
+func (s *shim) heardAll() {
+	s.rowsMu.Lock()
+	s.said = nil
 	s.rowsMu.Unlock()
 }
 
