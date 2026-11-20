@@ -144,12 +144,12 @@ func isDigit(c byte) bool { return '0' <= c && c <= '9' }
 func isWord(c byte) bool  { return isDigit(c) || c == '_' || 'a' <= c|0x20 && c|0x20 <= 'z' }
 
 // sameWordsBut is whether b, Claude Code's record of the message a, has
-// a's words, read as words reads them: each of a's characters, in order,
-// where b may hold more that are neither letter nor digit, or another such
-// in place of one of a's. Any of taken, each once, is left out of a where
-// b doesn't hold it: an image file's path Claude Code took as the image
-// (imageSources). n is how many were left out, tags how many pastes b's
-// own tags open, and at where a and b first differ.
+// a's words, read as words reads them: only letters and digits are
+// compared, each of a's in b, in order, and no more. Any of taken, each
+// once, is left out of a where b doesn't hold it: an image file's path
+// Claude Code took as the image (imageSources). n is how many were left
+// out, tags how many pastes b's own tags open, and at where a and b first
+// differ.
 func sameWordsBut(a, b string, taken []string) (same bool, n, tags int, at differs) {
 	used := make([]bool, len(taken))
 	x, y := words{s: a}, words{s: b, own: true}
@@ -161,13 +161,11 @@ func sameWordsBut(a, b string, taken []string) (same bool, n, tags int, at diffe
 				continue
 			}
 		}
-		r, q := x.next(), y.next()
-		if r != q && r > ' ' && q > ' ' && !lettered(r) && !lettered(q) {
-			continue // another mark for the message's
+		r := x.next()
+		if r >= 0 && !lettered(r) {
+			continue
 		}
-		for q != r && q >= 0 && !lettered(q) {
-			q = y.next() // a mark Claude Code put in
-		}
+		q := y.letter()
 		if r != q {
 			return false, n, y.tags, differs{x.at(r), y.at(q), r, q}
 		}
@@ -231,30 +229,42 @@ func takenAt(x, y words, taken []string, used []bool) int {
 	return 0
 }
 
-// sameUpTo is whether y goes on as x does till x has read up to stop.
+// sameUpTo is whether y goes on as x does till x has read up to stop,
+// their letters and digits compared as sameWordsBut compares them.
 func sameUpTo(x, y words, stop int) bool {
 	for x.i < stop {
-		if r := x.next(); r < 0 || r != y.next() {
+		r := x.next()
+		if r >= 0 && !lettered(r) {
+			continue
+		}
+		if r < 0 || r != y.letter() {
 			return false
 		}
 	}
 	return true
 }
 
-// letters counts s's characters as words reads them, its spaces aside;
-// own is for Claude Code's record.
+// letter is w's next letter or digit, -1 at the end.
+func (w *words) letter() rune {
+	r := w.next()
+	for r >= 0 && !lettered(r) {
+		r = w.next()
+	}
+	return r
+}
+
+// letters counts s's letters and digits as words reads them; own is for
+// Claude Code's record.
 func letters(s string, own bool) int {
 	w, n := words{s: s, own: own}, 0
-	for r := w.next(); r >= 0; r = w.next() {
-		if r != ' ' {
-			n++
-		}
+	for r := w.letter(); r >= 0; r = w.letter() {
+		n++
 	}
 	return n
 }
 
 // messageCut is a message Claude Code recorded otherwise than it was
-// pasted: got and sent count its characters, white space aside, and
+// pasted: got and sent count its letters and digits (letters), and
 // gotImages and sentImages its images when its words were whole.
 type messageCut struct {
 	got, sent, gotImages, sentImages int
@@ -269,7 +279,7 @@ func (e *messageCut) Error() string {
 	case e.pastes > e.pieces:
 		return fmt.Sprintf("Claude Code took the message as %d pastes, of %d pasted%s", e.pastes, e.pieces, cutHint())
 	case e.got < e.sent:
-		return fmt.Sprintf("Claude Code recorded %d of the message's %d characters%s", e.got, e.sent, cutHint())
+		return fmt.Sprintf("Claude Code recorded %d of %d letters and digits%s", e.got, e.sent, cutHint())
 	}
 	return e.at.String() + cutHint()
 }

@@ -788,7 +788,7 @@ func TestShimCutMessageIsUnpastable(t *testing.T) {
 	long := "K-HEAD " + strings.Repeat("filler words ", 400) + " K-TAIL"
 	out := runShim(t, []string{"FAKE_CUT=1"}, append([]string{fakePath(t)}, pArgs...), []string{long}, 2)
 	if r := out[1]; r["type"] != "result" || r["is_error"] != true || !strings.HasPrefix(fmt.Sprint(r["result"]), Unpastable) ||
-		!strings.Contains(fmt.Sprint(r["result"]), "characters") {
+		!strings.Contains(fmt.Sprint(r["result"]), "letters and digits") {
 		t.Fatalf("a cut message ended %v, want an error beginning %q", out, Unpastable)
 	}
 	for _, m := range out {
