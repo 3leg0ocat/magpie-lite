@@ -4,7 +4,6 @@
 
 ## 修改
 
-- **完整性校验**：Claude Code 交互模式没收到完整消息时（[yetone/magpie#5205](https://github.com/yetone/magpie/issues/5205)），上游改用 `claude -p` 重发；lite 改为这一轮不作答，返回 400 提示重发。
 - **更新**：移除自动更新、更新检查和 What's new。
 - **隐私**：不发送使用统计。
 - **供应商**：“添加供应商”仅列出以下选项，并移除赞助商推荐。
