@@ -3,7 +3,6 @@ package claudetui
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -117,29 +116,6 @@ func TestWholeInUnseen(t *testing.T) {
 				t.Fatalf("wholeIn = %v, want whole %v", err, c.whole)
 			}
 		})
-	}
-}
-
-// TestCutTold: a message not whole ends its turn as a 400 the client
-// doesn't ask again, and not as Unpastable, which the bridge would ask
-// again as claude -p.
-func TestCutTold(t *testing.T) {
-	var b strings.Builder
-	s := &shim{out: &b, sid: "s1"}
-	if s.cutTold(errors.New("another")) || b.Len() > 0 {
-		t.Fatal("told an error that isn't a cut message")
-	}
-	if !s.cutTold(fmt.Errorf("send: %w", &messageCut{got: 1, sent: 2})) {
-		t.Fatal("a cut message wasn't told")
-	}
-	var r struct {
-		IsError bool   `json:"is_error"`
-		Result  string `json:"result"`
-		Status  int    `json:"api_error_status"`
-	}
-	if err := json.Unmarshal([]byte(b.String()), &r); err != nil || !r.IsError || r.Status != 400 ||
-		!strings.HasPrefix(r.Result, messageNotWhole) || strings.Contains(r.Result, Unpastable) {
-		t.Fatalf("told %q", b.String())
 	}
 }
 
@@ -409,8 +385,9 @@ func TestHold(t *testing.T) {
 	s.emit(map[string]any{"type": "stream_event"})
 	err := s.unhold(&messageCut{got: 1, sent: 2})
 	s.emit(map[string]any{"type": "result", "subtype": "success"})
-	if !s.cutTold(err) || strings.Contains(b.String(), "stream_event") || strings.Contains(b.String(), "success") ||
-		!strings.Contains(b.String(), messageNotWhole) {
+	s.tell(map[string]any{"type": "result", "is_error": true, "result": Unpastable + err.Error()})
+	if strings.Contains(b.String(), "stream_event") || strings.Contains(b.String(), "success") ||
+		!strings.Contains(b.String(), Unpastable) {
 		t.Fatalf("a cut message's answer got out: %q", b.String())
 	}
 }

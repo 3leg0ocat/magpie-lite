@@ -858,10 +858,8 @@ func (s *shim) input(r io.Reader) error {
 			err = s.send(pieces)
 			s.dropImages()
 			var unpasted *imageUnpasted
-			if s.cutTold(err) {
-				return err
-			}
-			if errors.As(err, &unpasted) {
+			var cut *messageCut
+			if errors.As(err, &unpasted) || errors.As(err, &cut) {
 				// the prompt holds the path as words: the turn is told
 				// it failed, for the bridge to ask it as claude -p, and
 				// this Claude Code ends with it
