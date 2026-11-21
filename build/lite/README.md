@@ -10,7 +10,7 @@
   - 官方：Anthropic、OpenAI、Google Gemini、DeepSeek、xAI、Kimi、智谱 / Z.ai、MiniMax、阿里云百炼
   - 本地：Ollama、LM Studio、oMLX、MLX-Serve
   - Remote magpie
-- **资源库**：仅保留 MCP 服务器和技能。其余功能（Instructions、Memory、Hooks、环境变量、子代理、斜杠命令、Claude 插件、RTK、billion-context、Pi packages）不显示，也不在后台运行或同步到各 agent。
+- **资源库**：仅保留 MCP 服务器和技能。其余功能（Instructions、Memory、Hooks、环境变量、子代理、斜杠命令、规则、Claude 插件、RTK、billion-context、Pi packages）不显示，也不在后台运行或同步到各 agent。
 
 订阅、插件、自定义供应商和已有配置不受影响。
 
